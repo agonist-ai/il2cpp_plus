@@ -3,6 +3,7 @@
 #include "gc/GCHandle.h"
 #include "os/Mutex.h"
 #include "vm/Class.h"
+#include "vm/Field.h"
 #include "vm/GenericClass.h"
 #include "vm/Image.h"
 #include "vm/Method.h"
@@ -74,6 +75,13 @@ namespace metadata
         return inflatedType;
     }
 
+    const Il2CppType* GenericMetadata::InflateIfNeeded(const Il2CppType* type, const Il2CppGenericInst* classInst, bool inflateMethodVars)
+    {
+        Il2CppGenericContext context = {};
+        context.class_inst = classInst;
+        return InflateIfNeeded(type, &context, inflateMethodVars);
+    }
+
     const Il2CppType* GenericMetadata::InflateIfNeeded(const Il2CppType* type, const Il2CppGenericContext* context, bool inflateMethodVars)
     {
         switch (type->type)
@@ -123,7 +131,7 @@ namespace metadata
             }
             case IL2CPP_TYPE_GENERICINST:
             {
-                const Il2CppGenericInst* inst = type->data.generic_class->context.class_inst;
+                const Il2CppGenericInst* inst = GenericClass::GetInstance(type->data.generic_class);
                 if (inst == NULL)
                     return NULL; // This is a generic type that was too deeply nested to generate
 
@@ -165,7 +173,7 @@ namespace metadata
         // temporary inst to lookup a permanent one that may already exist
         Il2CppGenericClass genericClass = { 0 };
         genericClass.type = genericTypeDefinition;
-        genericClass.context.class_inst = inst;
+        genericClass.class_inst = inst;
 
         FastAutoLock lock(&s_GenericClassMutex);
         Il2CppGenericClassSet::const_iterator iter = s_GenericClassSet.find(&genericClass);
@@ -174,13 +182,18 @@ namespace metadata
 
         Il2CppGenericClass* newClass = MetadataAllocGenericClass();
         newClass->type = genericTypeDefinition;
-        newClass->context.class_inst = inst;
+        newClass->class_inst = inst;
 
         s_GenericClassSet.insert(newClass);
 
         ++il2cpp_runtime_stats.generic_class_count;
 
         return newClass;
+    }
+
+    const MethodInfo* GenericMetadata::Inflate(const MethodInfo* methodDefinition, const Il2CppGenericInst* classInst)
+    {
+        return GenericMethod::GetMethod(methodDefinition, classInst, NULL);
     }
 
     const MethodInfo* GenericMetadata::Inflate(const MethodInfo* methodDefinition, const Il2CppGenericContext* context)
@@ -192,9 +205,7 @@ namespace metadata
 
     static int RecursiveGenericDepthFor(Il2CppGenericClass* genericClass)
     {
-        int classInstDepth = RecursiveGenericDepthFor(genericClass->context.class_inst);
-        int methodInstDepth = RecursiveGenericDepthFor(genericClass->context.method_inst);
-        return std::max(classInstDepth, methodInstDepth);
+        return RecursiveGenericDepthFor(GenericClass::GetInstance(genericClass));
     }
 
     static int RecursiveGenericDepthFor(const Il2CppGenericInst* inst)
@@ -212,6 +223,13 @@ namespace metadata
         }
 
         return maximumDepth + 1;
+    }
+
+    const Il2CppGenericMethod GenericMetadata::Inflate(const Il2CppGenericMethod& genericMethod, const Il2CppGenericInst* classInst)
+    {
+        Il2CppGenericContext context = {};
+        context.class_inst = classInst;
+        return Inflate(genericMethod, &context);
     }
 
     const Il2CppGenericMethod GenericMetadata::Inflate(const Il2CppGenericMethod& genericMethod, const Il2CppGenericContext* context)
@@ -254,43 +272,75 @@ namespace metadata
         ConstrainedCallsToGenericInterfaceMethodsOnStructsAreNotSupported();
     }
 
+    Il2CppRGCTXData* GenericMetadata::InflateRGCTXLocked(const Il2CppImage* image, uint32_t token, const Il2CppGenericInst* classInst, const FastAutoLock& lock, Il2CppException** exc)
+    {
+        Il2CppGenericContext context = {};
+        context.class_inst = classInst;
+        return InflateRGCTXLocked(image, token, &context, lock, exc);
+    }
+
     Il2CppRGCTXData* GenericMetadata::InflateRGCTXLocked(const Il2CppImage* image, uint32_t token, const Il2CppGenericContext* context, const FastAutoLock& lock, Il2CppException** exc)
     {
         // This method assumes that it has the g_MetadataLock
         *exc = NULL;
 
         RGCTXCollection collection = MetadataCache::GetRGCTXs(image, token);
-        if (collection.count == 0)
+        if (collection.Count() == 0)
             return NULL;
 
-        Il2CppRGCTXData* dataValues = (Il2CppRGCTXData*)MetadataCalloc(collection.count, sizeof(Il2CppRGCTXData));
-        for (RGCTXIndex rgctxIndex = 0; rgctxIndex < collection.count; rgctxIndex++)
+        RGCTXIndex dataSize = 0;
+        for (RGCTXIndex rgctxIndex = 0; rgctxIndex < collection.Count(); rgctxIndex++)
         {
-            const Il2CppRGCTXDefinition* definitionData = collection.items + rgctxIndex;
-            switch (definitionData->type)
+            Il2CppRGCTXDefinition definitionData = collection.Get(rgctxIndex);
+            switch (definitionData.type)
+            {
+                case IL2CPP_RGCTX_DATA_CONSTRAINED_CALL_METHOD:
+                case IL2CPP_RGCTX_DATA_FIELD_OFFSET_FIELD:
+                    // Constrained calls and field offsets each take two slots in the source,
+                    // but produce only one entry in the final data, so skip the secondary slot.
+                    break;
+                default:
+                    dataSize++;
+                    break;
+            }
+        }
+
+        Il2CppRGCTXData* dataValues = (Il2CppRGCTXData*)MetadataCalloc(dataSize, sizeof(Il2CppRGCTXData));
+        for (RGCTXIndex rgctxIndex = 0, dataValuesIndex = 0; rgctxIndex < collection.Count(); rgctxIndex++, dataValuesIndex++)
+        {
+            IL2CPP_ASSERT(dataValuesIndex < dataSize);
+
+            Il2CppRGCTXDefinition definitionData = collection.Get(rgctxIndex);
+
+            switch (definitionData.type)
             {
                 case IL2CPP_RGCTX_DATA_TYPE:
-                    dataValues[rgctxIndex].type = GenericMetadata::InflateIfNeeded(MetadataCache::GetTypeFromRgctxDefinition(definitionData), context, true);
+                    dataValues[dataValuesIndex].type = GenericMetadata::InflateIfNeeded(MetadataCache::GetTypeFromRgctxDefinition(&definitionData), context, true);
                     break;
                 case IL2CPP_RGCTX_DATA_CLASS:
                 {
-                    Il2CppClass* klass = Class::FromIl2CppType(GenericMetadata::InflateIfNeeded(MetadataCache::GetTypeFromRgctxDefinition(definitionData), context, true));
+                    Il2CppClass* klass = Class::FromIl2CppType(GenericMetadata::InflateIfNeeded(MetadataCache::GetTypeFromRgctxDefinition(&definitionData), context, true));
                     Class::InitSizeAndFieldLayoutLocked(klass, lock);
+                    Class::SetupTypeHierarchyLocked(klass, lock);
 
                     if (klass->initializationExceptionGCHandle)
                         *exc = (Il2CppException*)gc::GCHandle::GetTarget(klass->initializationExceptionGCHandle);
 
-                    dataValues[rgctxIndex].klass = klass;
+                    dataValues[dataValuesIndex].klass = klass;
                     break;
                 }
                 case IL2CPP_RGCTX_DATA_METHOD:
-                    dataValues[rgctxIndex].method = GenericMethod::GetMethod(Inflate(MetadataCache::GetGenericMethodFromRgctxDefinition(definitionData), context));
+                    dataValues[dataValuesIndex].method = GenericMethod::GetMethod(Inflate(MetadataCache::GetGenericMethodFromRgctxDefinition(&definitionData), context));
                     break;
-                case IL2CPP_RGCTX_DATA_CONSTRAINED:
+                case IL2CPP_RGCTX_DATA_CONSTRAINED_CALL_TYPE:
                 {
+                    IL2CPP_ASSERT(rgctxIndex + 1 < collection.Count());
+                    Il2CppRGCTXDefinition methodData = collection.Get(rgctxIndex + 1);
+                    IL2CPP_ASSERT(methodData.type == IL2CPP_RGCTX_DATA_CONSTRAINED_CALL_METHOD);
+
                     const Il2CppType* type;
                     const MethodInfo* method;
-                    std::tie(type, method) = MetadataCache::GetConstrainedCallFromRgctxDefinition(definitionData);
+                    std::tie(type, method) = MetadataCache::GetConstrainedCallFromRgctxDefinition(&definitionData, &methodData);
 
                     const Il2CppType* inflatedType = GenericMetadata::InflateIfNeeded(type, context, true);
                     if (method->is_inflated)
@@ -304,7 +354,35 @@ namespace metadata
                         method = Class::GetVirtualMethod(inflatedClass, method);
                     }
 
-                    dataValues[rgctxIndex].method = method;
+                    dataValues[dataValuesIndex].method = method;
+
+                    rgctxIndex++; // Constrained call data takes two slots
+                }
+                break;
+                case IL2CPP_RGCTX_DATA_FIELD_OFFSET_TYPE:
+                {
+                    IL2CPP_ASSERT(rgctxIndex + 1 < collection.Count());
+                    Il2CppRGCTXDefinition fieldData = collection.Get(rgctxIndex + 1);
+                    IL2CPP_ASSERT(fieldData.type == IL2CPP_RGCTX_DATA_FIELD_OFFSET_FIELD);
+
+                    const Il2CppType* declaringType;
+                    FieldIndex fieldIndex;
+                    std::tie(declaringType, fieldIndex) = MetadataCache::GetFieldInfoFromRgctxDefinition(&definitionData, &fieldData);
+
+                    Il2CppClass* declaringClass = Class::FromIl2CppType(GenericMetadata::InflateIfNeeded(declaringType, context, true));
+                    Class::InitSizeAndFieldLayoutLocked(declaringClass, lock);
+                    IL2CPP_ASSERT(fieldIndex < (FieldIndex)Class::GetNumFields(declaringClass));
+                    FieldInfo* field = declaringClass->fields + fieldIndex;
+                    size_t offset = Field::GetOffset(field);
+
+                    if (Field::IsInstance(field) && Class::IsValuetype(declaringClass))
+                        offset -= sizeof(Il2CppObject);
+                    else if (Field::IsThreadStatic(field))
+                        offset = MetadataCache::GetThreadLocalStaticOffsetForField(field);
+
+                    dataValues[dataValuesIndex].offset = offset;
+
+                    rgctxIndex++; // Field offset data takes two slots
                 }
                 break;
                 default:
@@ -333,7 +411,7 @@ namespace metadata
         if (!klass->generic_class)
             return false;
 
-        return ContainsGenericParameters(klass->generic_class->context.class_inst);
+        return ContainsGenericParameters(GenericClass::GetInstance(klass->generic_class));
     }
 
     bool GenericMetadata::ContainsGenericParameters(const MethodInfo* method)
@@ -367,7 +445,7 @@ namespace metadata
             case IL2CPP_TYPE_MVAR:
                 return true;
             case IL2CPP_TYPE_GENERICINST:
-                return ContainsGenericParameters(type->data.generic_class->context.class_inst);
+                return ContainsGenericParameters(GenericClass::GetInstance(type->data.generic_class));
             case IL2CPP_TYPE_ARRAY:
                 return ContainsGenericParameters(type->data.array->etype);
             case IL2CPP_TYPE_SZARRAY:

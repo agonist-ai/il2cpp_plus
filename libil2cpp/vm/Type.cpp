@@ -674,7 +674,7 @@ namespace vm
                 if (IsGenericInstance(type))
                 {
                     Il2CppGenericClass *gclass = type->data.generic_class;
-                    const Il2CppGenericInst *inst = gclass->context.class_inst;
+                    const Il2CppGenericInst *inst = GenericClass::GetInstance(gclass);
                     Il2CppTypeNameFormat nested_format;
 
                     nested_format = format == IL2CPP_TYPE_NAME_FORMAT_FULL_NAME ? IL2CPP_TYPE_NAME_FORMAT_ASSEMBLY_QUALIFIED : format;
@@ -907,7 +907,7 @@ namespace vm
                 if (klass->generic_class)
                 {
                     Il2CppGenericClass *gclass = klass->generic_class;
-                    const Il2CppGenericInst *inst = gclass->context.class_inst;
+                    const Il2CppGenericInst *inst = GenericClass::GetInstance(gclass);
                     Il2CppTypeNameFormat nested_format;
 
                     nested_format = format == IL2CPP_TYPE_NAME_FORMAT_FULL_NAME ? IL2CPP_TYPE_NAME_FORMAT_ASSEMBLY_QUALIFIED : format;
@@ -1067,7 +1067,7 @@ namespace vm
         }
         else if (klass->generic_class)
         {
-            const Il2CppGenericInst *inst = klass->generic_class->context.class_inst;
+            const Il2CppGenericInst* inst = il2cpp::vm::GenericClass::GetInstance(klass->generic_class);
             res = Array::New(arrType, inst->type_argc);
             for (uint32_t i = 0; i < inst->type_argc; ++i)
                 il2cpp_array_setref(res, i, Reflection::GetTypeObject(inst->type_argv[i]));
@@ -1266,16 +1266,26 @@ namespace vm
     void Type::ConstructClosedDelegate(Il2CppDelegate* delegate, Il2CppObject* target, Il2CppMethodPointer addr, const MethodInfo* method)
     {
         InvokeDelegateConstructor(delegate, target, method);
-        SetClosedDelegateInvokeMethod(delegate, target, addr);
+        SetClosedDelegateInvokeMethod(delegate, target, addr, NULL);
     }
 
-    void Type::SetClosedDelegateInvokeMethod(Il2CppDelegate* delegate, Il2CppObject* target, Il2CppMethodPointer addr)
+    void Type::SetClosedDelegateInvokeMethod(Il2CppDelegate* delegate, Il2CppObject* target, Il2CppMethodPointer addr, InvokerMethod invoker)
     {
         // For a closed delegate we set our invoke_impl to the method we want to invoke and the "this" we'll pass to the invoke_impl to the target
         // This reduces the cost of a closed delegate call to normal virtual call
         delegate->method_ptr = addr;
-        delegate->invoke_impl = addr;
         delegate->invoke_impl_this = target;
+
+        bool isViaInvoker = (Il2CppMethodPointer)delegate->method->invoker_method == delegate->invoke_impl;
+        if (!isViaInvoker)
+            delegate->invoke_impl = addr;
+        else if (invoker)
+            delegate->invoke_impl = (Il2CppMethodPointer)invoker;
+    }
+
+    Il2CppObject* Type::GetDelegateTarget(Il2CppDelegate* delegate)
+    {
+        return delegate->target;
     }
 
 /**

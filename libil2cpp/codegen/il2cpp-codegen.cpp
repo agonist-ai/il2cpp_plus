@@ -107,6 +107,15 @@ void Il2CppCodeGenWriteBarrierForClass(Il2CppClass* klass, void** targetAddress,
 #endif
 }
 
+void Il2CppCodeGenWriteBarrierForField(FieldInfo* field, void** targetAddress, void* object)
+{
+#if IL2CPP_ENABLE_STRICT_WRITE_BARRIERS
+    Il2CppCodeGenWriteBarrierForType(field->type, targetAddress, object);
+#else
+    il2cpp::gc::GarbageCollector::SetWriteBarrier(targetAddress);
+#endif
+}
+
 #endif // IL2CPP_ENABLE_WRITE_BARRIERS
 
 
@@ -120,7 +129,7 @@ void il2cpp_codegen_marshal_store_last_error()
     il2cpp::vm::LastError::StoreLastError();
 }
 
-#if !MONO_NET8_BCL
+#if !MONO_NET_BCL
 Il2CppAsyncResult* il2cpp_codegen_delegate_begin_invoke(RuntimeDelegate* delegate, void** params, RuntimeDelegate* asyncCallback, RuntimeObject* state)
 {
     return il2cpp::vm::ThreadPoolMs::DelegateBeginInvoke(delegate, params, asyncCallback, state);
@@ -133,10 +142,16 @@ RuntimeObject* il2cpp_codegen_delegate_end_invoke(Il2CppAsyncResult* asyncResult
 
 #endif
 
-void il2cpp_codegen_set_closed_delegate_invoke(RuntimeObject* delegate, RuntimeObject* target, void* methodPtr)
+void il2cpp_codegen_set_closed_delegate_invoke(RuntimeObject* delegate, RuntimeObject* target, void* methodPtr, InvokerMethod invoker)
 {
     IL2CPP_ASSERT(delegate->klass->parent == il2cpp_defaults.multicastdelegate_class);
-    il2cpp::vm::Type::SetClosedDelegateInvokeMethod((RuntimeDelegate*)delegate, target, (Il2CppMethodPointer)methodPtr);
+    il2cpp::vm::Type::SetClosedDelegateInvokeMethod((RuntimeDelegate*)delegate, target, (Il2CppMethodPointer)methodPtr, invoker);
+}
+
+RuntimeObject* il2cpp_codegen_delegate_get_target(RuntimeObject* delegate)
+{
+    IL2CPP_ASSERT(delegate->klass->parent == il2cpp_defaults.multicastdelegate_class);
+    return il2cpp::vm::Type::GetDelegateTarget((Il2CppDelegate*)delegate);
 }
 
 Il2CppMethodPointer il2cpp_codegen_resolve_icall(const char* name)
@@ -226,61 +241,21 @@ void* il2cpp_codegen_get_thread_static_data(RuntimeClass* klass)
     return il2cpp::vm::Thread::GetThreadStaticData(klass->thread_static_fields_offset);
 }
 
+#if IL2CPP_DEBUG
+
 void il2cpp_codegen_assert_field_size(RuntimeField* field, size_t size)
 {
-    IL2CPP_ASSERT(size == il2cpp_codegen_sizeof(InitializedTypeInfo(il2cpp::vm::Class::FromIl2CppType(field->type))));
+    IL2CPP_ASSERT(!field || size == il2cpp_codegen_sizeof(InitializedTypeInfo(il2cpp::vm::Class::FromIl2CppType(field->type))));
 }
 
-void* il2cpp_codegen_get_instance_field_data_pointer(void* instance, RuntimeField* field)
+void il2cpp_codegen_assert_field_offset(RuntimeField* field, size_t offset)
 {
-    return il2cpp::vm::Field::GetInstanceFieldDataPointer(instance, field);
+    IL2CPP_ASSERT(!il2cpp::vm::Field::IsInstance(field) || offset == il2cpp::vm::Field::GetOffset(field) - (il2cpp::vm::Class::IsValuetype(il2cpp::vm::Field::GetParent(field)) ? sizeof(RuntimeObject) : 0));
+    IL2CPP_ASSERT(!il2cpp::vm::Field::IsNormalStatic(field) || offset == il2cpp::vm::Field::GetOffset(field));
+    IL2CPP_ASSERT(!il2cpp::vm::Field::IsThreadStatic(field) || offset == il2cpp::vm::MetadataCache::GetThreadLocalStaticOffsetForField(field));
 }
 
-void il2cpp_codegen_write_instance_field_data(void* instance, RuntimeField* field, void* data, uint32_t size)
-{
-    il2cpp_codegen_assert_field_size(field, size);
-    IL2CPP_ASSERT(il2cpp::vm::Field::IsInstance(field));
-
-    void* fieldPointer = il2cpp_codegen_get_instance_field_data_pointer(instance, field);
-    il2cpp_codegen_memcpy(fieldPointer, data, size);
-    Il2CppCodeGenWriteBarrierForType(field->type, (void**)fieldPointer, NULL);
-}
-
-void* il2cpp_codegen_get_static_field_data_pointer(RuntimeField* field)
-{
-    IL2CPP_ASSERT(il2cpp::vm::Field::IsNormalStatic(field));
-
-    return ((uint8_t*)field->parent->static_fields) + field->offset;
-}
-
-void il2cpp_codegen_write_static_field_data(RuntimeField* field, void* data, uint32_t size)
-{
-    il2cpp_codegen_assert_field_size(field, size);
-    IL2CPP_ASSERT(il2cpp::vm::Field::IsNormalStatic(field));
-
-    void* fieldPointer = il2cpp_codegen_get_static_field_data_pointer(field);
-    il2cpp_codegen_memcpy(fieldPointer, data, size);
-    Il2CppCodeGenWriteBarrierForType(field->type, (void**)fieldPointer, NULL);
-}
-
-void* il2cpp_codegen_get_thread_static_field_data_pointer(RuntimeField* field)
-{
-    IL2CPP_ASSERT(il2cpp::vm::Field::IsThreadStatic(field));
-
-    int threadStaticFieldOffset = il2cpp::vm::MetadataCache::GetThreadLocalStaticOffsetForField(field);
-    void* threadStaticData = il2cpp::vm::Thread::GetThreadStaticData(field->parent->thread_static_fields_offset);
-    return static_cast<uint8_t*>(threadStaticData) + threadStaticFieldOffset;
-}
-
-void il2cpp_codegen_write_thread_static_field_data(RuntimeField* field, void* data, uint32_t size)
-{
-    il2cpp_codegen_assert_field_size(field, size);
-    IL2CPP_ASSERT(il2cpp::vm::Field::IsThreadStatic(field));
-
-    void* fieldPointer = il2cpp_codegen_get_thread_static_field_data_pointer(field);
-    il2cpp_codegen_memcpy(fieldPointer, data, size);
-    Il2CppCodeGenWriteBarrierForType(field->type, (void**)fieldPointer, NULL);
-}
+#endif
 
 void il2cpp_codegen_memory_barrier()
 {
@@ -1229,16 +1204,60 @@ bool il2cpp_codegen_is_reference_or_contains_references(const RuntimeMethod* met
     return klass->has_references;
 }
 
-void* InterlockedExchangeImplRef(void** location, void* value)
+void il2cpp_codegen_delegate_invoke_open_inst(Il2CppMethodPointer methodPtr, const MethodInfo* method, RuntimeDelegate* thisPtr, void** args, void* result)
 {
-    void* retval = il2cpp::os::Atomic::ExchangePointer(location, value);
-    il2cpp::gc::GarbageCollector::SetWriteBarrier(location);
-    return retval;
+    RuntimeObject* obj = (RuntimeObject*)args[0];
+    NullCheck(obj);
+    method->invoker_method(methodPtr, method, obj, args + 1, result);
 }
 
-void* InterlockedCompareExchangeImpl(void** location, void* value, void* comparand)
+void il2cpp_codegen_delegate_invoke_closed_static(Il2CppMethodPointer methodPtr, const MethodInfo* method, RuntimeObject* thisPtr, void** args, void* result)
 {
-    void* retval = il2cpp::os::Atomic::CompareExchangePointer(location, value, comparand);
-    il2cpp::gc::GarbageCollector::SetWriteBarrier(location);
-    return retval;
+    // This relies on the generated Invoke method over-allocating the arguments by one, so we can move the arguments up and insert the "this" pointer for the static call
+    args = args - 1;
+    args[0] = thisPtr;
+    // Passing thisPtr here assumes that the thisPtr will be ignored on statics - this is a micro-optimization to remove a load null instruction
+    method->invoker_method(methodPtr, method, thisPtr, args, result);
+}
+
+void il2cpp_codegen_delegate_invoke_open_virtual(Il2CppMethodPointer methodPtr, const MethodInfo* method, RuntimeDelegate* thisPtr, void** args, void* result)
+{
+    RuntimeObject* obj = (RuntimeObject*)args[0];
+    NullCheck(obj);
+    const VirtualInvokeData& invokeData = il2cpp_codegen_get_virtual_invoke_data(method->slot, obj);
+    invokeData.method->invoker_method(invokeData.method->methodPointer, invokeData.method, obj, args + 1, result);
+}
+
+void il2cpp_codegen_delegate_invoke_open_interface(Il2CppMethodPointer methodPtr, const MethodInfo* method, RuntimeDelegate* thisPtr, void** args, void* result)
+{
+    RuntimeObject* obj = (RuntimeObject*)args[0];
+    NullCheck(obj);
+    const VirtualInvokeData& invokeData = il2cpp_codegen_get_interface_invoke_data(method->slot, obj, method->klass);
+    invokeData.method->invoker_method(invokeData.method->methodPointer, invokeData.method, obj, args + 1, result);
+}
+
+void il2cpp_codegen_delegate_invoke_open_generic_virtual(Il2CppMethodPointer methodPtr, const MethodInfo* method, RuntimeDelegate* thisPtr, void** args, void* result)
+{
+    RuntimeObject* obj = (RuntimeObject*)args[0];
+    NullCheck(obj);
+    const MethodInfo* genericMethod = il2cpp_codegen_get_generic_virtual_method(method, obj);
+    genericMethod->invoker_method(genericMethod->methodPointer, genericMethod, obj, args + 1, result);
+}
+
+void il2cpp_codegen_delegate_invoke_open_generic_interface(Il2CppMethodPointer methodPtr, const MethodInfo* method, RuntimeDelegate* thisPtr, void** args, void* result)
+{
+    RuntimeObject* obj = (RuntimeObject*)args[0];
+    NullCheck(obj);
+    const MethodInfo* genericMethod = il2cpp_codegen_get_generic_interface_method(method, obj);
+    genericMethod->invoker_method(genericMethod->methodPointer, genericMethod, obj, args + 1, result);
+}
+
+void il2cpp_codegen_delegate_invoke_multicast(Il2CppMethodPointer methodPtr, const MethodInfo* method, Il2CppMulticastDelegate* thisPtr, void** args, void* result)
+{
+    uint32_t delegateCount = il2cpp::vm::Array::GetLength(thisPtr->delegates);
+    for (uint32_t i = 0; i < delegateCount; i++)
+    {
+        RuntimeDelegate* currentDelegate = il2cpp_array_get(thisPtr->delegates, RuntimeDelegate*, i);
+        ((InvokerMethod)(currentDelegate->invoke_impl))(currentDelegate->method_ptr, currentDelegate->method, currentDelegate->invoke_impl_this, args, result);
+    }
 }

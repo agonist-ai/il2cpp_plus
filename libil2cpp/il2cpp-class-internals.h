@@ -6,6 +6,7 @@
 #include "il2cpp-runtime-metadata.h"
 #include "il2cpp-metadata.h"
 #include "il2cpp-pinvoke-support.h"
+#include "Il2CppDefaults.h"
 
 #define THREAD_LOCAL_STATIC_MASK (int32_t)0x80000000
 
@@ -41,141 +42,6 @@ typedef enum Il2CppTypeNameFormat
     IL2CPP_TYPE_NAME_FORMAT_ASSEMBLY_QUALIFIED,
     IL2CPP_TYPE_NAME_FORMAT_REFLECTION_QUALIFIED
 } Il2CppTypeNameFormat;
-
-
-typedef struct Il2CppDefaults
-{
-    Il2CppImage *corlib;
-    Il2CppImage *corlib_gen;
-    Il2CppClass *object_class;
-    Il2CppClass *byte_class;
-    Il2CppClass *void_class;
-    Il2CppClass *void_ptr_class;
-    Il2CppClass *boolean_class;
-    Il2CppClass *sbyte_class;
-    Il2CppClass *int16_class;
-    Il2CppClass *uint16_class;
-    Il2CppClass *int32_class;
-    Il2CppClass *uint32_class;
-    Il2CppClass *int_class;
-    Il2CppClass *uint_class;
-    Il2CppClass *int64_class;
-    Il2CppClass *uint64_class;
-    Il2CppClass *single_class;
-    Il2CppClass *double_class;
-    Il2CppClass *char_class;
-    Il2CppClass *string_class;
-    Il2CppClass *enum_class;
-    Il2CppClass *array_class;
-    Il2CppClass *delegate_class;
-    Il2CppClass *multicastdelegate_class;
-#if !MONO_NET8_BCL
-    Il2CppClass *asyncresult_class;
-#endif
-    Il2CppClass *manualresetevent_class;
-    Il2CppClass *typehandle_class;
-    Il2CppClass *fieldhandle_class;
-    Il2CppClass *methodhandle_class;
-    Il2CppClass *systemtype_class;
-    Il2CppClass *monotype_class;
-    Il2CppClass *exception_class;
-    Il2CppClass *threadabortexception_class;
-    Il2CppClass *thread_class;
-#if !MONO_NET8_BCL
-    Il2CppClass *internal_thread_class;
-#endif
-    Il2CppClass *appdomain_class;
-    Il2CppClass *appdomain_setup_class;
-#if MONO_NET8_BCL
-    Il2CppClass* app_context_class;
-    Il2CppClass* assembly_load_context_class;
-#endif
-    Il2CppClass *member_info_class;
-    Il2CppClass *field_info_class;
-    Il2CppClass *method_info_class;
-    Il2CppClass *property_info_class;
-    Il2CppClass *event_info_class;
-    Il2CppClass *stringbuilder_class;
-#if MONO_NET8_BCL
-    Il2CppClass* mono_stack_frame_class;
-    Il2CppClass *stack_trace_class;
-#endif
-    Il2CppClass *stack_frame_class;
-    Il2CppClass *marshal_class;
-    Il2CppClass *typed_reference_class;
-    Il2CppClass *generic_ilist_class;
-    Il2CppClass *generic_icollection_class;
-    Il2CppClass *generic_ienumerable_class;
-    Il2CppClass *generic_ireadonlylist_class;
-    Il2CppClass *generic_ireadonlycollection_class;
-    Il2CppClass* generic_readonlycollection_class;
-    Il2CppClass *runtimetype_class;
-    Il2CppClass *generic_nullable_class;
-    Il2CppClass *il2cpp_com_object_class;
-    Il2CppClass *attribute_class;
-#if MONO_NET8_BCL
-    Il2CppClass *runtime_customattribute_data_class;
-#else
-    Il2CppClass *customattribute_data_class;
-#endif
-    Il2CppClass *customattribute_typed_argument_class;
-    Il2CppClass *customattribute_named_argument_class;
-    Il2CppClass *version;
-    Il2CppClass *culture_info;
-#if !MONO_NET8_BCL
-    Il2CppClass *async_call_class;
-#endif
-    Il2CppClass *assembly_class;
-    Il2CppClass *assembly_name_class;
-    Il2CppClass *mono_assembly_name_class;
-    Il2CppClass *parameter_info_class;
-    Il2CppClass *module_class;
-    Il2CppClass *dbnull_class;
-    Il2CppClass *error_wrapper_class;
-    Il2CppClass *missing_class;
-    Il2CppClass *value_type_class;
-    Il2CppClass *stream_class;
-
-#if !MONO_NET8_BCL
-    // Stuff used by the mono code
-    Il2CppClass *threadpool_wait_callback_class;
-    MethodInfo *threadpool_perform_wait_callback_method;
-    Il2CppClass *mono_method_message_class;
-#endif
-
-    // Windows.Foundation.IReference`1<T>
-    Il2CppClass* ireference_class;
-    // Windows.Foundation.IReferenceArray`1<T>
-    Il2CppClass* ireferencearray_class;
-    // Windows.Foundation.Collections.IKeyValuePair`2<K, V>
-    Il2CppClass* ikey_value_pair_class;
-    // System.Collections.Generic.KeyValuePair`2<K, V>
-    Il2CppClass* key_value_pair_class;
-    // Windows.Foundation.Uri
-    Il2CppClass* windows_foundation_uri_class;
-    // Windows.Foundation.IUriRuntimeClass
-    Il2CppClass* windows_foundation_iuri_runtime_class_class;
-    // System.Uri
-    Il2CppClass* system_uri_class;
-    // System.Guid
-    Il2CppClass* system_guid_class;
-
-    Il2CppClass* sbyte_shared_enum;
-    Il2CppClass* int16_shared_enum;
-    Il2CppClass* int32_shared_enum;
-    Il2CppClass* int64_shared_enum;
-
-    Il2CppClass* byte_shared_enum;
-    Il2CppClass* uint16_shared_enum;
-    Il2CppClass* uint32_shared_enum;
-    Il2CppClass* uint64_shared_enum;
-    Il2CppClass* il2cpp_shared_object_type;
-    Il2CppClass* il2cpp_fully_shared_type;
-    Il2CppClass* il2cpp_fully_shared_struct_type;
-
-    const MethodInfo* thread_sleep_internal_method;
-    const MethodInfo* runtime_type_get_type_method;
-} Il2CppDefaults;
 
 extern LIBIL2CPP_CODEGEN_API Il2CppDefaults il2cpp_defaults;
 
@@ -315,6 +181,7 @@ typedef union Il2CppRGCTXData
     const MethodInfo* method;
     const Il2CppType* type;
     Il2CppClass* klass;
+    size_t offset;
 } Il2CppRGCTXData;
 
 typedef struct MethodInfo
@@ -329,7 +196,7 @@ typedef struct MethodInfo
 
     union
     {
-        const Il2CppRGCTXData* rgctx_data; /* is_inflated is true and is_generic is false, i.e. a generic instance method */
+        const Il2CppRGCTXData* rgctx_data; /* is_inflated is true - an inflated generic method or a non-generic method on generic class. (rgctx_data == klass->rgctx_data in that case) */
         Il2CppMetadataMethodDefinitionHandle methodMetadataHandle;
     };
 
@@ -352,11 +219,25 @@ typedef struct MethodInfo
     uint8_t is_unmanaged_callers_only : 1;
 } MethodInfo;
 
-typedef struct Il2CppRuntimeInterfaceOffsetPair
+// One entry per interface that an Il2CppClass implements, holding everything needed for
+// both interface dispatch and reflection/assignability. Array layout invariants:
+//   - Entries [0, interface_offsets_count) are dispatchable: offset is a valid vtable slot
+//     (>= 0), used by the hot dispatch path in ClassInlines.h.
+//   - Entries [interface_offsets_count, interfaces_count) are reflection-only: offset is
+//     kInvalidInterfaceOffset and dispatch ignores them.
+//   - depth >= 0: hops from the owning class (0 = directly declared, 1 = one base-class
+//     or interface-to-interface hop, ...).
+//   - depth < 0: grafted onto an array by CLR array assignability rules (covariance,
+//     primitive-size equivalence, interface flattening). Reflection (Class::GetInterfaces)
+//     skips these; Class::IsAssignableFrom treats them as full interfaces.
+typedef struct Il2CppRuntimeInterfaceData
 {
     Il2CppClass* interfaceType;
     int32_t offset;
-} Il2CppRuntimeInterfaceOffsetPair;
+    int32_t depth;
+} Il2CppRuntimeInterfaceData;
+
+static const int32_t kInvalidInterfaceOffset = -1;
 
 #if IL2CPP_COMPILER_MSVC
 #pragma warning( push )
@@ -404,8 +285,7 @@ typedef struct Il2CppClass
     // The following fields need initialized before access. This can be done per field or as an aggregate via a call to Class::Init
     FieldInfo* fields; // Initialized in SetupFields
     const MethodInfo** methods; // Initialized in SetupMethods
-    Il2CppClass** implementedInterfaces; // Initialized in SetupInterfaces
-    Il2CppRuntimeInterfaceOffsetPair* interfaceOffsets; // Initialized in Init
+    Il2CppRuntimeInterfaceData* interfaces; // Initialized in SetupInterfaces. See Il2CppRuntimeInterfaceData above.
     void* static_fields; // Initialized in Init
 
     union
@@ -606,16 +486,10 @@ typedef struct Il2CppCodeGenModule
     const Il2CppMethodPointer* methodPointers;
     const uint32_t adjustorThunkCount;
     const Il2CppTokenAdjustorThunkPair* adjustorThunks;
-    const int32_t* invokerIndices;
     const uint32_t reversePInvokeWrapperCount;
     const Il2CppTokenIndexMethodTuple* reversePInvokeWrapperIndices;
-    const uint32_t rgctxRangesCount;
-    const Il2CppTokenRangePair* rgctxRanges;
-    const uint32_t rgctxsCount;
-    const Il2CppRGCTXDefinition* rgctxs;
     const Il2CppDebuggerMetadataRegistration *debuggerMetadata;
     const Il2CppMethodPointer moduleInitializer;
-    TypeDefinitionIndex* staticConstructorTypeIndices;
     const Il2CppMetadataRegistration* metadataRegistration; // Per-assembly mode only
     const Il2CppCodeRegistration* codeRegistaration; // Per-assembly mode only
 } Il2CppCodeGenModule;
@@ -647,12 +521,8 @@ typedef struct Il2CppMetadataRegistration
     Il2CppGenericClass* const * genericClasses;
     int32_t genericInstsCount;
     const Il2CppGenericInst* const * genericInsts;
-    int32_t genericMethodTableCount;
-    const Il2CppGenericMethodFunctionsDefinitions* genericMethodTable;
     int32_t typesCount;
     const Il2CppType* const * types;
-    int32_t methodSpecsCount;
-    const Il2CppMethodSpec* methodSpecs;
 
     FieldIndex fieldOffsetsCount;
     const int32_t** fieldOffsets;
@@ -661,6 +531,8 @@ typedef struct Il2CppMetadataRegistration
     const Il2CppTypeDefinitionSizes** typeDefinitionsSizes;
     const size_t metadataUsagesCount;
     void** const* metadataUsages;
+    const size_t alwaysInitMetadataUsagesCount;
+    Il2CppClass** const* alwaysInitMetadataUsages;
 } Il2CppMetadataRegistration;
 
 /*

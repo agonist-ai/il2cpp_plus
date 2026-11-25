@@ -65,10 +65,10 @@ static void FullySharedGenericInvokeRedirectHasAdjustorThunk(Il2CppMethodPointer
 {
     IL2CPP_ASSERT(Method::IsGenericInstance(method));
     IL2CPP_ASSERT(il2cpp::vm::Runtime::IsFullGenericSharingEnabled());
-    IL2CPP_ASSERT(methodPointer == method->virtualMethodPointer || methodPointer == method->methodPointer);
+    IL2CPP_ASSERT(methodPointer == method->virtualMethodPointer || methodPointer == method->methodPointer || Class::IsAssignableFrom(il2cpp_defaults.delegate_class, Method::GetClass(method)));
 
     const FullySharedGenericMethodInfo* sharedMethodInfo = reinterpret_cast<const FullySharedGenericMethodInfo*>(method);
-    IL2CPP_ASSERT(sharedMethodInfo->rawDirectMethodPointer != sharedMethodInfo->rawVirtualMethodPointer);
+    IL2CPP_ASSERT(sharedMethodInfo->rawDirectMethodPointer != sharedMethodInfo->rawVirtualMethodPointer || Class::IsAssignableFrom(il2cpp_defaults.delegate_class, Method::GetClass(method)));
 
     if (methodPointer == sharedMethodInfo->virtualMethodPointer)
         sharedMethodInfo->rawInvokerMethod(sharedMethodInfo->rawVirtualMethodPointer, method, obj, args, retVal);
@@ -80,10 +80,10 @@ static void FullySharedGenericInvokeRedirectNoAdjustorThunk(Il2CppMethodPointer 
 {
     IL2CPP_ASSERT(Method::IsGenericInstance(method));
     IL2CPP_ASSERT(il2cpp::vm::Runtime::IsFullGenericSharingEnabled());
-    IL2CPP_ASSERT(methodPointer == method->methodPointer || methodPointer == method->virtualMethodPointer);
+    IL2CPP_ASSERT(methodPointer == method->methodPointer || methodPointer == method->virtualMethodPointer || Class::IsAssignableFrom(il2cpp_defaults.delegate_class, Method::GetClass(method)));
 
     const FullySharedGenericMethodInfo* sharedMethodInfo = reinterpret_cast<const FullySharedGenericMethodInfo*>(method);
-    IL2CPP_ASSERT(sharedMethodInfo->rawDirectMethodPointer == sharedMethodInfo->rawVirtualMethodPointer);
+    IL2CPP_ASSERT(sharedMethodInfo->rawDirectMethodPointer == sharedMethodInfo->rawVirtualMethodPointer || Class::IsAssignableFrom(il2cpp_defaults.delegate_class, Method::GetClass(method)));
 
     sharedMethodInfo->rawInvokerMethod(sharedMethodInfo->rawDirectMethodPointer, method, obj, args, retVal);
 }
@@ -297,19 +297,13 @@ namespace metadata
 
         if (!gmethod.context.method_inst)
         {
-            if (methodDefinition->is_generic)
-                newMethod->is_generic = true;
-
-            if (!declaringClass->generic_class)
-            {
-                newMethod->genericContainerHandle = methodDefinition->genericContainerHandle;
-            }
-
-            newMethod->methodMetadataHandle = methodDefinition->methodMetadataHandle;
+            // The class may be inflated, but if the method was a generic method definition than we still
+            // consider the method on the inflated type to be a generic method definition
+            newMethod->is_generic = methodDefinition->is_generic;
         }
         else if (!il2cpp::vm::Runtime::IsLazyRGCTXInflationEnabled() && !il2cpp::metadata::GenericMetadata::ContainsGenericParameters(newMethod))
         {
-            // we only need RGCTX for generic instance methods
+            // Generic methods store their own rgctx
             Il2CppException* exc;
             newMethod->rgctx_data = InflateRGCTXLocked(gmethod, lock, &exc);
         }
@@ -319,6 +313,13 @@ namespace metadata
         if (methodPointers.methodPointer)
         {
             newMethod->invoker_method = methodPointers.invoker_method;
+            if (newMethod->virtualMethodPointer == NULL)
+            {
+                if (Method::RequiresAdjustorThunk(newMethod))
+                    newMethod->virtualMethodPointer = Method::GetEntryPointNotFoundMethodInfo()->methodPointer;
+                else
+                    newMethod->virtualMethodPointer = methodPointers.methodPointer;
+            }
         }
         else
         {

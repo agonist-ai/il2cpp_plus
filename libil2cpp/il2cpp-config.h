@@ -587,8 +587,8 @@ extern void il2cpp_assert(const char* assertion, const char* file, unsigned int 
 
 #define IL2CPP_USE_PLATFORM_SPECIFIC_PRINTF IL2CPP_TARGET_IOS
 
-#if !defined(MONO_NET8_BCL)
-#define MONO_NET8_BCL 0
+#if !defined(MONO_NET_BCL)
+#define MONO_NET_BCL 0
 #endif
 
 #if IL2CPP_SANITIZE_ADDRESS
@@ -605,16 +605,14 @@ extern void il2cpp_assert(const char* assertion, const char* file, unsigned int 
 #define IL2CPP_STATIC_ICU 0
 #endif
 
-// TODO: Enable at .NET 9 - All FP casts become saturating instead of being architecture dependent
-#define IL2CPP_FLOATING_POINT_CAST_IS_SATURATING 0
-
+ #define IL2CPP_FLOATING_POINT_CAST_IS_SATURATING MONO_NET_BCL
 
 #if IL2CPP_FLOATING_POINT_CAST_IS_SATURATING
 
 // MSVC requires us to use intrinsics to enable saturating FP casts
 // clang has a compiler flag -fno-strict-float-cast-overflow
 #if defined(_MSC_VER)
-#define IL2CPP_USE_SATURATING_FP_CAST_INTRINSICS 1
+#define IL2CPP_USE_SATURATING_FP_CAST_INTRINSICS (IL2CPP_TARGET_X86 || IL2CPP_TARGET_X64)
 #endif
 
 #else // IL2CPP_FLOATING_POINT_CAST_IS_SATURATING
@@ -637,7 +635,9 @@ extern void il2cpp_assert(const char* assertion, const char* file, unsigned int 
 #define IL2CPP_USE_SSE2_FP_CASTS 0
 #endif
 
+#define IL2CPP_ENABLE_SSE2_FP_CASTS IL2CPP_TARGET_X64
+
 // On the legacy NetStandard 2.1 Mono builds we made FP overflow work like x86 even on ARM
 #ifndef IL2CPP_EMULATE_X86_FP_UNSIGNED_OVERFLOW
-#define IL2CPP_EMULATE_X86_FP_UNSIGNED_OVERFLOW (!MONO_NET8_BCL && (IL2CPP_TARGET_ARMV7 || IL2CPP_TARGET_ARM64) && !IL2CPP_FLOATING_POINT_CAST_IS_SATURATING)
+#define IL2CPP_EMULATE_X86_FP_UNSIGNED_OVERFLOW (!MONO_NET_BCL && (IL2CPP_TARGET_ARMV7 || IL2CPP_TARGET_ARM64) && !IL2CPP_FLOATING_POINT_CAST_IS_SATURATING)
 #endif
