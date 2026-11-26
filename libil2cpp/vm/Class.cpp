@@ -45,6 +45,12 @@
 #include <limits>
 #include <stdarg.h>
 
+#include <set>
+#include "hybridclr/metadata/MetadataUtil.h"
+#include "hybridclr/interpreter/Engine.h"
+#include "hybridclr/interpreter/Interpreter.h"
+#include "hybridclr/interpreter/InterpreterModule.h"
+
 namespace il2cpp
 {
 namespace vm
@@ -362,7 +368,7 @@ namespace vm
 
         klass->instance_size = sizeof(void*);
         klass->stack_slot_size = sizeof(void*);
-        klass->thread_static_fields_size = -1;
+        klass->thread_static_fields_size = 0;
         klass->native_size = -1;
         klass->size_inited = true;
         klass->typeHierarchyDepth = 1;
@@ -1236,6 +1242,9 @@ namespace vm
                     newMethod->virtualMethodPointer = newMethod->methodPointer;
                 }
 
+                newMethod->methodPointerCallByInterp = newMethod->methodPointer;
+                newMethod->virtualMethodPointerCallByInterp = newMethod->virtualMethodPointer;
+                newMethod->initInterpCallMethodPointer = 1;
                 newMethod->return_type = methodInfo.return_type;
 
                 newMethod->parameters_count = (uint8_t)methodInfo.parameterCount;
@@ -1266,6 +1275,7 @@ namespace vm
                     newMethod->virtualMethodPointer = stubs.virtualMethodPointer;
                 }
 
+                newMethod->isInterpterImpl = hybridclr::interpreter::InterpreterModule::IsImplementsByInterpreter(newMethod);
 
                 methodTable[index] = newMethod;
 
@@ -1706,6 +1716,17 @@ namespace vm
         }
 
         klass->interfaces = SetupInterfacesLocked(klass, lock);
+
+        // hybridclr: interpreter vtable setup reads the implemented interfaces' methods,
+        // so every interface of a non-array class is initialized (6000.5 did this inside SetupInterfacesLocked).
+        if (klass->rank == 0)
+        {
+            for (uint16_t i = 0; i < klass->interfaces_count; i++)
+            {
+                if (klass->interfaces[i].depth >= 0)
+                    InitLocked(klass->interfaces[i].interfaceType, lock);
+            }
+        }
 
         if (klass->parent && !klass->parent->initialized)
             InitLocked(klass->parent, lock);
@@ -2395,13 +2416,43 @@ namespace vm
             }
 
             klass = Image::FromTypeNameParseInfo(image, info, searchFlags & kTypeSearchFlagIgnoreCase);
+            if (klass)
+            {
+                return klass;
+            }
+            hybridclr::interpreter::MachineState& state = hybridclr::interpreter::InterpreterModule::GetCurrentThreadMachineState();
+            const hybridclr::interpreter::InterpFrame* frame = state.GetTopFrame();
+            if (frame)
+            {
+                const Il2CppImage* interpImage = frame->method->klass->image;
+                if (interpImage != image)
+                {
+                    klass = Image::FromTypeNameParseInfo(interpImage, info, searchFlags & kTypeSearchFlagIgnoreCase);
+                    if (klass)
+                    {
+                        return klass;
+                    }
+                }
+            }
+            const  Il2CppImage* interpImage = state.GetTopExecutingImage();
+            if (interpImage)
+            {
+                klass = Image::FromTypeNameParseInfo(interpImage, info, searchFlags & kTypeSearchFlagIgnoreCase);
+                if (klass)
+                {
+                    return klass;
+                }
+            }
 
-            // First, try mscorlib
-            if (klass == NULL && image != Image::GetCorlib())
-                klass = Image::FromTypeNameParseInfo(Image::GetCorlib(), info, searchFlags & kTypeSearchFlagIgnoreCase);
+            // First, try mscorlib            if (klass == NULL && image != Image::GetCorlib())
+            klass = Image::FromTypeNameParseInfo(Image::GetCorlib(), info, searchFlags & kTypeSearchFlagIgnoreCase);
+            if (klass)
+            {
+                return klass;
+            }
 
             // If we did not find it, now look in all loaded assemblies, except the ones we have tried already.
-            if (klass == NULL && !dontUseExecutingImage)
+            if (!dontUseExecutingImage)
             {
                 for (auto assembly : *Assembly::GetAllAssemblies())
                 {
@@ -2409,8 +2460,8 @@ namespace vm
                     if (currentImage != Image::GetCorlib() && currentImage != image)
                     {
                         klass = Image::FromTypeNameParseInfo(currentImage, info, searchFlags & kTypeSearchFlagIgnoreCase);
-                        if (klass != NULL)
-                            break;
+                        if (klass)
+                            return klass;
                     }
                 }
             }
@@ -2496,7 +2547,7 @@ namespace vm
 
     static bool is_generic_argument(Il2CppType* type)
     {
-        return type->type == IL2CPP_TYPE_VAR || type->type == IL2CPP_TYPE_VAR;
+        return type->type == IL2CPP_TYPE_VAR || type->type == IL2CPP_TYPE_MVAR;
     }
 
     Il2CppClass* Class::GenericParamGetBaseType(Il2CppClass* klass)
